@@ -2,9 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
+const { initializeDatabase } = require('./utils/dbInit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Initialize database
+initializeDatabase();
 
 // Middleware
 app.use(cors());
@@ -31,7 +35,7 @@ app.use('/api/reports', reportRoutes);
 
 // Main route
 app.get('/', (req, res) => {
-    res.render('index');
+    res.render('index', { title: 'Dashboard' });
 });
 
 // Error handling middleware
