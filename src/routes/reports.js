@@ -30,11 +30,17 @@ router.get('/daily-sales/:date', async (req, res) => {
         });
         
         // Group by fuel type
-        const reportData = sales.reduce((acc, sale) => {
+        const reportData = {};
+        sales.forEach(sale => {
+            // Ensure associations exist
+            if (!sale.pump || !sale.pump.fuelType) {
+                return;
+            }
+            
             const fuelTypeName = sale.pump.fuelType.name;
             
-            if (!acc[fuelTypeName]) {
-                acc[fuelTypeName] = {
+            if (!reportData[fuelTypeName]) {
+                reportData[fuelTypeName] = {
                     fuelType: fuelTypeName,
                     totalQuantity: 0,
                     totalAmount: 0,
@@ -43,16 +49,15 @@ router.get('/daily-sales/:date', async (req, res) => {
                 };
             }
             
-            acc[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
-            acc[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
-            acc[fuelTypeName].totalSales++;
-        }, {});
+            reportData[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
+            reportData[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
+            reportData[fuelTypeName].totalSales++;
+        });
         
         // Calculate averages
         Object.keys(reportData).forEach(key => {
             const item = reportData[key];
-            const uniqueSales = sales.filter(s => s.pump.fuelType.name === key);
-            const totalUnits = uniqueSales.reduce((sum, sale) => sum + parseFloat(sale.quantity), 0);
+            const totalUnits = item.totalQuantity;
             item.averageUnitPrice = totalUnits > 0 ? item.totalAmount / totalUnits : 0;
         });
         
@@ -100,11 +105,17 @@ router.get('/monthly-sales/:year/:month', async (req, res) => {
         });
         
         // Group by fuel type
-        const monthlyReport = sales.reduce((acc, sale) => {
+        const monthlyReport = {};
+        sales.forEach(sale => {
+            // Ensure association exists
+            if (!sale.fuelType) {
+                return;
+            }
+            
             const fuelTypeName = sale.fuelType.name;
             
-            if (!acc[fuelTypeName]) {
-                acc[fuelTypeName] = {
+            if (!monthlyReport[fuelTypeName]) {
+                monthlyReport[fuelTypeName] = {
                     fuelType: fuelTypeName,
                     totalQuantity: 0,
                     totalAmount: 0,
@@ -112,10 +123,10 @@ router.get('/monthly-sales/:year/:month', async (req, res) => {
                 };
             }
             
-            acc[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
-            acc[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
-            acc[fuelTypeName].totalSales++;
-        }, {});
+            monthlyReport[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
+            monthlyReport[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
+            monthlyReport[fuelTypeName].totalSales++;
+        });
         
         const reportArray = Object.values(monthlyReport);
         
@@ -169,11 +180,18 @@ router.get('/shift-report/:date', async (req, res) => {
         
         shifts.forEach(shift => {
             const shiftSales = sales.filter(sale => sale.shift === shift);
-            const shiftData = shiftSales.reduce((acc, sale) => {
+            const shiftData = {};
+            
+            shiftSales.forEach(sale => {
+                // Ensure associations exist
+                if (!sale.pump || !sale.pump.fuelType) {
+                    return;
+                }
+                
                 const fuelTypeName = sale.pump.fuelType.name;
                 
-                if (!acc[fuelTypeName]) {
-                    acc[fuelTypeName] = {
+                if (!shiftData[fuelTypeName]) {
+                    shiftData[fuelTypeName] = {
                         fuelType: fuelTypeName,
                         totalQuantity: 0,
                         totalAmount: 0,
@@ -181,15 +199,15 @@ router.get('/shift-report/:date', async (req, res) => {
                     };
                 }
                 
-                acc[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
-                acc[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
-                acc[fuelTypeName].totalSales++;
-            }, {});
+                shiftData[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
+                shiftData[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
+                shiftData[fuelTypeName].totalSales++;
+            });
             
             shiftReport[shift] = {
                 sales: Object.values(shiftData),
-                totalQuantity: shiftSales.reduce((sum, s) => sum + parseFloat(s.quantity), 0),
-                totalAmount: shiftSales.reduce((sum, s) => sum + parseFloat(s.totalAmount), 0),
+                totalQuantity: shiftSales.reduce((sum, s) => sum + parseFloat(s.quantity || 0), 0),
+                totalAmount: shiftSales.reduce((sum, s) => sum + parseFloat(s.totalAmount || 0), 0),
                 totalSales: shiftSales.length
             };
         });
@@ -222,11 +240,17 @@ router.get('/fuel-comparison/:startDate/:endDate', async (req, res) => {
         });
         
         // Group by fuel type
-        const fuelComparison = sales.reduce((acc, sale) => {
+        const fuelComparison = {};
+        sales.forEach(sale => {
+            // Ensure association exists
+            if (!sale.fuelType) {
+                return;
+            }
+            
             const fuelTypeName = sale.fuelType.name;
             
-            if (!acc[fuelTypeName]) {
-                acc[fuelTypeName] = {
+            if (!fuelComparison[fuelTypeName]) {
+                fuelComparison[fuelTypeName] = {
                     fuelType: fuelTypeName,
                     totalQuantity: 0,
                     totalAmount: 0,
@@ -234,10 +258,10 @@ router.get('/fuel-comparison/:startDate/:endDate', async (req, res) => {
                 };
             }
             
-            acc[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
-            acc[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
-            acc[fuelTypeName].totalSales++;
-        }, {});
+            fuelComparison[fuelTypeName].totalQuantity += parseFloat(sale.quantity);
+            fuelComparison[fuelTypeName].totalAmount += parseFloat(sale.totalAmount);
+            fuelComparison[fuelTypeName].totalSales++;
+        });
         
         const reportArray = Object.values(fuelComparison);
         
@@ -284,9 +308,9 @@ router.get('/revenue-analytics', async (req, res) => {
         const salesByDate = await Sale.findAll({
             attributes: [
                 'shiftDate',
-                [Sequelize.fn('SUM', Sequelize.col('totalAmount')), 'dailyRevenue'],
-                [Sequelize.fn('COUNT', Sequelize.col('id')), 'transactionCount'],
-                [Sequelize.fn('AVG', Sequelize.col('totalAmount')), 'avgTransactionValue']
+                [Sequelize.fn('SUM', Sequelize.col('Sale.totalAmount')), 'dailyRevenue'],
+                [Sequelize.fn('COUNT', Sequelize.col('Sale.id')), 'transactionCount'],
+                [Sequelize.fn('AVG', Sequelize.col('Sale.totalAmount')), 'avgTransactionValue']
             ],
             where: whereClause,
             group: ['shiftDate'],
@@ -296,18 +320,10 @@ router.get('/revenue-analytics', async (req, res) => {
         // Get sales grouped by fuel type
         const salesByFuelType = await Sale.findAll({
             attributes: [
-                [Sequelize.col('fuelTypeId'), 'fuelTypeId']
-            ],
-            include: [{
-                model: FuelType,
-                as: 'fuelType',
-                attributes: ['id', 'name']
-            }],
-            attributes: [
-                [Sequelize.col('fuelTypeId'), 'fuelTypeId'],
-                [Sequelize.fn('SUM', Sequelize.col('totalAmount')), 'revenue'],
-                [Sequelize.fn('SUM', Sequelize.col('quantity')), 'quantitySold'],
-                [Sequelize.fn('COUNT', Sequelize.col('id')), 'transactionCount']
+                [Sequelize.col('Sale.fuelTypeId'), 'fuelTypeId'],
+                [Sequelize.fn('SUM', Sequelize.col('Sale.totalAmount')), 'revenue'],
+                [Sequelize.fn('SUM', Sequelize.col('Sale.quantity')), 'quantitySold'],
+                [Sequelize.fn('COUNT', Sequelize.col('Sale.id')), 'transactionCount']
             ],
             where: whereClause,
             include: [{
@@ -315,17 +331,17 @@ router.get('/revenue-analytics', async (req, res) => {
                 as: 'fuelType',
                 attributes: ['id', 'name']
             }],
-            group: ['fuelTypeId', 'fuelType.id'],
-            order: [[Sequelize.fn('SUM', Sequelize.col('totalAmount')), 'DESC']]
+            group: ['Sale.fuelTypeId', 'fuelType.id'],
+            order: [[Sequelize.fn('SUM', Sequelize.col('Sale.totalAmount')), 'DESC']]
         });
         
         // Calculate overall metrics
         const overallMetrics = await Sale.findOne({
             attributes: [
-                [Sequelize.fn('SUM', Sequelize.col('totalAmount')), 'totalRevenue'],
-                [Sequelize.fn('SUM', Sequelize.col('quantity')), 'totalQuantitySold'],
-                [Sequelize.fn('COUNT', Sequelize.col('id')), 'totalTransactions'],
-                [Sequelize.fn('AVG', Sequelize.col('totalAmount')), 'averageTransactionValue']
+                [Sequelize.fn('SUM', Sequelize.col('Sale.totalAmount')), 'totalRevenue'],
+                [Sequelize.fn('SUM', Sequelize.col('Sale.quantity')), 'totalQuantitySold'],
+                [Sequelize.fn('COUNT', Sequelize.col('Sale.id')), 'totalTransactions'],
+                [Sequelize.fn('AVG', Sequelize.col('Sale.totalAmount')), 'averageTransactionValue']
             ],
             where: whereClause
         });
@@ -344,10 +360,10 @@ router.get('/revenue-analytics', async (req, res) => {
                 transactions: parseInt(s.dataValues.transactionCount)
             })),
             overallMetrics: {
-                totalRevenue: parseFloat(overallMetrics.dataValues.totalRevenue),
-                totalQuantitySold: parseFloat(overallMetrics.dataValues.totalQuantitySold),
-                totalTransactions: parseInt(overallMetrics.dataValues.totalTransactions),
-                averageTransactionValue: parseFloat(overallMetrics.dataValues.averageTransactionValue)
+                totalRevenue: parseFloat(overallMetrics?.dataValues?.totalRevenue || 0),
+                totalQuantitySold: parseFloat(overallMetrics?.dataValues?.totalQuantitySold || 0),
+                totalTransactions: parseInt(overallMetrics?.dataValues?.totalTransactions || 0),
+                averageTransactionValue: parseFloat(overallMetrics?.dataValues?.averageTransactionValue || 0)
             }
         });
     } catch (error) {
