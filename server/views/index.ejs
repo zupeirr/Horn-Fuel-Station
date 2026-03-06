@@ -1,0 +1,209 @@
+<%- include('layouts/main', { title: 'Dashboard' }) %>
+
+<div class="row">
+    <div class="col-md-12">
+        <h1 class="mb-4">Horn Fuel Station Dashboard</h1>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Total Sales Today</h5>
+                <h3 class="card-text">$<span id="today-sales">0.00</span></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Active Pumps</h5>
+                <h3 class="card-text"><span id="active-pumps">0</span>/<span id="total-pumps">0</span></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">Low Stock Items</h5>
+                <h3 class="card-text"><span id="low-stock">0</span></h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">Current Shift</h5>
+                <h3 class="card-text"><span id="current-shift">N/A</span></h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Sales</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Pump</th>
+                                <th>Fuel Type</th>
+                                <th>Quantity</th>
+                                <th>Total Amount</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-sales">
+                            <!-- Recent sales will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/sales/new" class="btn btn-primary">Record New Sale</a>
+                    <a href="/pumps" class="btn btn-outline-secondary">Manage Pumps</a>
+                    <a href="/inventory" class="btn btn-outline-secondary">Check Inventory</a>
+                    <a href="/reports/daily" class="btn btn-outline-secondary">View Reports</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>Current Inventory Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="inventory-status">
+                    <!-- Inventory status will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load dashboard data
+        loadDashboardData();
+    });
+    
+    async function loadDashboardData() {
+        try {
+            // Load today's sales
+            const today = new Date().toISOString().split('T')[0];
+            const salesResponse = await fetch(`/api/reports/daily-sales/${today}`);
+            const salesData = await salesResponse.json();
+            
+            if (salesData.grandTotal) {
+                document.getElementById('today-sales').textContent = salesData.grandTotal.totalAmount.toFixed(2);
+            }
+            
+            // Load pump status
+            const pumpsResponse = await fetch('/api/pumps');
+            const pumpsData = await pumpsResponse.json();
+            
+            const activePumps = pumpsData.filter(pump => pump.isOpen).length;
+            document.getElementById('active-pumps').textContent = activePumps;
+            document.getElementById('total-pumps').textContent = pumpsData.length;
+            
+            // Load low stock items
+            const inventoryResponse = await fetch('/api/inventory/alerts/low-stock');
+            const inventoryData = await inventoryResponse.json();
+            
+            document.getElementById('low-stock').textContent = inventoryData.length;
+            
+            // Set current shift based on time
+            const now = new Date();
+            const hour = now.getHours();
+            let shift = 'night';
+            
+            if (hour >= 6 && hour < 14) {
+                shift = 'morning';
+            } else if (hour >= 14 && hour < 22) {
+                shift = 'afternoon';
+            }
+            
+            document.getElementById('current-shift').textContent = shift.charAt(0).toUpperCase() + shift.slice(1);
+            
+            // Load recent sales
+            const recentSalesResponse = await fetch('/api/sales');
+            const recentSalesData = await recentSalesResponse.json();
+            
+            const recentSalesBody = document.getElementById('recent-sales');
+            recentSalesBody.innerHTML = '';
+            
+            // Show last 5 sales
+            const lastFiveSales = recentSalesData.slice(-5).reverse();
+            lastFiveSales.forEach(sale => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${sale.id}</td>
+                    <td>${sale.pump ? sale.pump.pumpNumber : 'N/A'}</td>
+                    <td>${sale.pump && sale.pump.fuelType ? sale.pump.fuelType.name : 'N/A'}</td>
+                    <td>${sale.quantity} L</td>
+                    <td>$${parseFloat(sale.totalAmount).toFixed(2)}</td>
+                    <td>${new Date(sale.createdAt).toLocaleTimeString()}</td>
+                `;
+                recentSalesBody.appendChild(row);
+            });
+            
+            // Load inventory status
+            const inventoryStatusResponse = await fetch('/api/inventory/summary');
+            const inventoryStatusData = await inventoryStatusResponse.json();
+            
+            const inventoryStatusDiv = document.getElementById('inventory-status');
+            inventoryStatusDiv.innerHTML = '';
+            
+            if (inventoryStatusData.summary && inventoryStatusData.summary.length > 0) {
+                inventoryStatusData.summary.forEach(item => {
+                    const percentage = item.tankCapacity > 0 ? 
+                        ((item.currentLevel / item.tankCapacity) * 100).toFixed(1) : 0;
+                    
+                    const statusClass = percentage < 20 ? 'bg-danger' : 
+                                      percentage < 40 ? 'bg-warning' : 'bg-success';
+                    
+                    const statusText = percentage < 20 ? 'Critical' : 
+                                     percentage < 40 ? 'Low' : 'Good';
+                    
+                    const div = document.createElement('div');
+                    div.className = 'mb-2';
+                    div.innerHTML = `
+                        <div class="d-flex justify-content-between">
+                            <span>${item.fuelType.name}</span>
+                            <span>${statusText}</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar ${statusClass}" 
+                                 role="progressbar" 
+                                 style="width: ${percentage}%;" 
+                                 aria-valuenow="${percentage}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100"></div>
+                        </div>
+                        <small class="text-muted">${item.currentLevel}L / ${item.tankCapacity}L (${percentage}%)</small>
+                    `;
+                    inventoryStatusDiv.appendChild(div);
+                });
+            } else {
+                inventoryStatusDiv.innerHTML = '<p class="text-muted">No inventory data available</p>';
+            }
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+        }
+    }
+</script>
