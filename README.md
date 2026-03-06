@@ -1,39 +1,40 @@
-# Horn Fuel Station
+# Horn-Fuel-Station
 
-A comprehensive fuel station management system supporting sales transactions, inventory alerts, receipt generation, and daily reporting.
+A comprehensive fuel station management system. This project provides tools for managing pumps, tanks, recording sales, generating receipts, and producing daily sales reports.
 
-## Overview
+## Current Status
+- **Progress:** 100% (Phases 0-7 complete).
+- **Features:** Auth, Sales, Inventory, PDF Receipts, WS Telemetry, Payments, Audit Logs, and Swagger Docs.
 
-This application serves to track gas pump fuel levels, log transactions done by cashiers, manage fuel types, and generate receipts and reports.
+## Quick Start (Docker)
 
-### Tech Stack
-- **Backend:** Node.js, Express, Sequelize (SQLite/MySQL)
-- **Frontend:** React, Vite (Coming in Phase 3)
-
-## Quick Start
-
-### 1. Installation
-
+Run everything with one command:
 ```bash
-npm install
+docker-compose up
 ```
 
-### 2. Environment Variables
+- **Frontend**: [http://localhost](http://localhost)
+- **API Docs (Swagger)**: [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
 
-Copy the `.env.example` file and configure it:
+## Architecture
 
-```bash
-cp .env.example .env
-```
+- **Backend**: Node.js + Express API with Sequelize ORM.
+- **Frontend**: React (Vite) Single Page Application.
+- **Real-time**: WebSocket server for live pump telemetry.
+- **Security**: JWT Authentication, RBAC, Joi Input Validation, and Audit Logging.
+- **Containerization**: Orchestrated via Docker Compose.
 
-### 3. Run Development Server
+## Tech Stack
+- **Backend:** Node.js + Express
+- **Database:** SQLite (Dev) / MySQL (Prod ready)
+- **Frontend:** React (Vite) + Lucide Icons + Glassmorphism CSS
+- **Communication**: REST API + WebSockets
+- **Documentation**: Swagger UI
 
-```bash
-npm run dev
-```
-
-## Contributing
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+## Documentation
+- [Operations Guide](docs/ops-guide.md)
+- [Feature Specification](docs/feature-spec.md)
+- [ERD Diagram](docs/erd.md)
 
 ## License
-[MIT](LICENSE)
+MIT
