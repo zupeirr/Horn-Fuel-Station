@@ -15,6 +15,14 @@ const Sale = sequelize.define('Sale', {
             key: 'id'
         }
     },
+    customerId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        references: {
+            model: 'customers',
+            key: 'id'
+        }
+    },
     pumpId: {
         type: DataTypes.INTEGER,
         allowNull: false,

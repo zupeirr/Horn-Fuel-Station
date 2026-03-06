@@ -20,6 +20,14 @@ const Pump = sequelize.define('Pump', {
             key: 'id'
         }
     },
+    tankId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        references: {
+            model: 'tanks',
+            key: 'id'
+        }
+    },
     currentMeterReading: {
         type: DataTypes.DECIMAL(10, 2),
         defaultValue: 0.00

@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, AuditLog } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 const validate = require('../middleware/validate');
 const { authSchemas } = require('../utils/schemas');
 
@@ -45,12 +46,26 @@ router.post('/register', validate(authSchemas.register), async (req, res) => {
 // Login user
 router.post('/login', validate(authSchemas.login), async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { identifier, password } = req.body;
 
-        // Find user by email
-        const user = await User.findOne({ where: { email } });
+        // Find user by email OR username
+        const user = await User.findOne({ 
+            where: { 
+                [Op.or]: [
+                    { email: identifier },
+                    { username: identifier }
+                ]
+            } 
+        });
 
         if (!user || !(await bcrypt.compare(password, user.password))) {
+            // Log failed attempt
+            await AuditLog.create({
+                action: 'LOGIN_FAILED',
+                details: JSON.stringify({ identifier, ip: req.ip }),
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
+            });
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
@@ -64,6 +79,16 @@ router.post('/login', validate(authSchemas.login), async (req, res) => {
             process.env.JWT_SECRET || 'fallback_secret_key',
             { expiresIn: '24h' }
         );
+
+        // Log successful login
+        await AuditLog.create({
+            userId: user.id,
+            action: 'LOGIN_SUCCESS',
+            entityType: 'User',
+            entityId: String(user.id),
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        });
 
         // Return user data with token
         const { password: pwd, ...userData } = user.toJSON();

@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const logger = require('./utils/logger');
 const { initializeDatabase } = require('./utils/dbInit');
 const http = require('http');
@@ -11,6 +13,24 @@ const swaggerJsdoc = require('swagger-jsdoc');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Security Middleware
+app.use(helmet());
+
+// Common Rate Limiter
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+app.use(generalLimiter);
+
+// Specific limiter for login/auth (Strict)
+const authLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // Limit each IP to 5 login attempts per hour
+    message: 'Too many login attempts, please try again after an hour'
+});
 
 // Swagger Configuration
 const swaggerOptions = {
@@ -65,15 +85,23 @@ const salesRoutes = require('./routes/sales');
 const inventoryRoutes = require('./routes/inventory');
 const reportRoutes = require('./routes/reports');
 const paymentRoutes = require('./routes/payments');
+const customerRoutes = require('./routes/customers');
+const expenseRoutes = require('./routes/expenses');
+const shiftRoutes = require('./routes/shifts');
+const tankRoutes = require('./routes/tanks');
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/payments', authenticate, paymentRoutes);
 app.use('/api/fuel-types', authenticate, fuelTypeRoutes);
 app.use('/api/pumps', authenticate, pumpRoutes);
 app.use('/api/sales', authenticate, salesRoutes);
 app.use('/api/inventory', authenticate, inventoryRoutes);
 app.use('/api/reports', authenticate, reportRoutes);
+app.use('/api/customers', authenticate, customerRoutes);
+app.use('/api/expenses', authenticate, expenseRoutes);
+app.use('/api/shifts', authenticate, shiftRoutes);
+app.use('/api/tanks', authenticate, tankRoutes);
 
 // Main route
 app.get('/', (req, res) => {
@@ -93,16 +121,24 @@ app.use((err, req, res, next) => {
 
 const server = http.createServer(app);
 
-// WebSocket Server for Pump Telemetry
+// WebSocket Server for Pump Telemetry and Alerts
 const wss = new WebSocket.Server({ server });
+app.set('wss', wss);
+
+// Helper to broadcast messages to all connected clients
+const broadcast = (data) => {
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(data));
+        }
+    });
+};
 
 wss.on('connection', (ws) => {
-    console.log('New client connected to Pump Telemetry WS');
-    
-    // Send initial status
-    ws.send(JSON.stringify({ type: 'STATUS', message: 'Connected to telemetry stream' }));
+    logger.info('New client connected to WS');
+    ws.send(JSON.stringify({ type: 'STATUS', message: 'Connected to Horn Fuel Real-time Stream' }));
 
-    // Simulate real-time pump data broadcast every 5 seconds
+    // Simulate real-time pump data broadcast every 10 seconds
     const interval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
             const mockTelemetry = {
@@ -126,3 +162,5 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
     logger.info(`Horn Fuel Station Management System running on port ${PORT}`);
 });
+
+module.exports = { app, server, broadcast };

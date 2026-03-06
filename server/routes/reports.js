@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { Sale, Pump, FuelType, User, Inventory } = require('../models');
+const { Sale, Pump, FuelType, User, Inventory, Tank, Expense, Customer } = require('../models');
 const { Op, Sequelize } = require('sequelize');
+const ExcelJS = require('exceljs');
 
 // Daily sales report
 router.get('/daily-sales/:date', async (req, res) => {
@@ -365,6 +366,172 @@ router.get('/revenue-analytics', async (req, res) => {
                 totalTransactions: parseInt(overallMetrics?.dataValues?.totalTransactions || 0),
                 averageTransactionValue: parseFloat(overallMetrics?.dataValues?.averageTransactionValue || 0)
             }
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Dashboard summary
+router.get('/dashboard-summary', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+        // 1. Basic Stats for Today
+        const todayStats = await Sale.findOne({
+            attributes: [
+                [Sequelize.fn('SUM', Sequelize.col('totalAmount')), 'revenue'],
+                [Sequelize.fn('COUNT', Sequelize.col('id')), 'count'],
+                [Sequelize.fn('SUM', Sequelize.col('quantity')), 'liters']
+            ],
+            where: { shiftDate: today }
+        });
+
+        // 2. Pump and Tank Stats
+        const activePumps = await Pump.count({ where: { status: 'active' } });
+        const tanks = await Tank.findAll({
+            include: [{ model: FuelType, as: 'fuelType', attributes: ['name'] }]
+        });
+        const lowFuelAlerts = tanks.filter(t => parseFloat(t.currentLevel) <= parseFloat(t.minLevel)).length;
+
+        // 3. 7-Day Sales Trend
+        const salesTrend = await Sale.findAll({
+            attributes: [
+                'shiftDate',
+                [Sequelize.fn('SUM', Sequelize.col('totalAmount')), 'revenue']
+            ],
+            where: {
+                shiftDate: { [Op.between]: [sevenDaysAgoStr, today] }
+            },
+            group: ['shiftDate'],
+            order: [['shiftDate', 'ASC']]
+        });
+
+        // 4. Fuel Distribution (Revenue by Fuel Type)
+        const fuelDistribution = await Sale.findAll({
+            attributes: [
+                [Sequelize.col('fuelType.name'), 'name'],
+                [Sequelize.fn('SUM', Sequelize.col('Sale.totalAmount')), 'value']
+            ],
+            where: { shiftDate: today },
+            include: [{ model: FuelType, as: 'fuelType', attributes: [] }],
+            group: ['fuelType.name']
+        });
+
+        res.json({
+            today: {
+                revenue: parseFloat(todayStats?.dataValues?.revenue || 0),
+                transactions: parseInt(todayStats?.dataValues?.count || 0),
+                liters: parseFloat(todayStats?.dataValues?.liters || 0)
+            },
+            activePumps,
+            lowFuelAlerts,
+            tankLevels: tanks.map(t => ({
+                name: t.tankNumber,
+                fuelType: t.fuelType.name,
+                level: parseFloat(t.currentLevel),
+                capacity: parseFloat(t.capacity),
+                percentage: (parseFloat(t.currentLevel) / parseFloat(t.capacity) * 100).toFixed(1)
+            })),
+            salesTrend: salesTrend.map(s => ({
+                date: s.shiftDate,
+                revenue: parseFloat(s.dataValues.revenue)
+            })),
+            fuelDistribution: fuelDistribution.map(f => ({
+                name: f.dataValues.name,
+                value: parseFloat(f.dataValues.value)
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Export all sales to Excel
+router.get('/export/sales/excel', async (req, res) => {
+    try {
+        const sales = await Sale.findAll({
+            include: [
+                { model: Pump, as: 'pump', attributes: ['pumpNumber'] },
+                { model: FuelType, as: 'fuelType', attributes: ['name'] },
+                { model: User, as: 'user', attributes: ['username'] }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Sales Report');
+
+        worksheet.columns = [
+            { header: 'ID', key: 'id', width: 10 },
+            { header: 'Date', key: 'createdAt', width: 20 },
+            { header: 'Pump', key: 'pump', width: 15 },
+            { header: 'Fuel Type', key: 'fuelType', width: 15 },
+            { header: 'Quantity (L)', key: 'quantity', width: 15 },
+            { header: 'Unit Price', key: 'unitPrice', width: 15 },
+            { header: 'Total Amount', key: 'totalAmount', width: 15 },
+            { header: 'Payment Method', key: 'paymentMethod', width: 15 },
+            { header: 'User', key: 'user', width: 15 }
+        ];
+
+        sales.forEach(sale => {
+            worksheet.addRow({
+                id: sale.id,
+                createdAt: sale.createdAt.toLocaleString(),
+                pump: sale.pump.pumpNumber,
+                fuelType: sale.fuelType.name,
+                quantity: parseFloat(sale.quantity),
+                unitPrice: parseFloat(sale.unitPrice),
+                totalAmount: parseFloat(sale.totalAmount),
+                paymentMethod: sale.paymentMethod,
+                user: sale.user.username
+            });
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=sales_report.xlsx');
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Profit and Loss Report
+router.get('/profit-loss', async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let whereClause = {};
+        if (startDate && endDate) {
+            whereClause.shiftDate = { [Op.between]: [startDate, endDate] };
+        }
+
+        // 1. Total Revenue
+        const revenue = await Sale.sum('totalAmount', { where: whereClause }) || 0;
+
+        // 2. Cost of Fuel (Sum of deliveries in the period - Simplified)
+        // In a real app, this would be based on FIFO/LIFO inventory cost
+        const fuelCost = (await Sale.sum('quantity', { where: whereClause }) || 0) * 1.05; // Mock 1.05 per liter cost
+
+        // 3. Operating Expenses
+        const expenseWhere = {};
+        if (startDate && endDate) {
+            expenseWhere.expenseDate = { [Op.between]: [startDate, endDate] };
+        }
+        const totalExpenses = await Expense.sum('amount', { where: expenseWhere }) || 0;
+
+        const netProfit = revenue - fuelCost - totalExpenses;
+
+        res.json({
+            revenue: parseFloat(revenue),
+            fuelCost: parseFloat(fuelCost),
+            operatingExpenses: parseFloat(totalExpenses),
+            netProfit: parseFloat(netProfit),
+            profitMargin: revenue > 0 ? (netProfit / revenue * 100).toFixed(2) : 0
         });
     } catch (error) {
         res.status(500).json({ message: error.message });

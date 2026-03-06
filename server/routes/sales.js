@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { Sale, Pump, FuelType, User } = require('../models');
+const { Sale, Pump, FuelType, User, Tank, Customer, Inventory } = require('../models');
+const WebSocket = require('ws');
 const { Op } = require('sequelize');
+const sequelize = require('../config/db');
 const auditLogger = require('../middleware/auditLogger');
 const validate = require('../middleware/validate');
 const { saleSchemas } = require('../utils/schemas');
@@ -18,6 +20,11 @@ router.get('/', async (req, res) => {
                     attributes: ['id', 'username', 'role']
                 },
                 {
+                    model: Customer,
+                    as: 'customer',
+                    attributes: ['id', 'name']
+                },
+                {
                     model: Pump,
                     as: 'pump',
                     include: [{
@@ -26,7 +33,8 @@ router.get('/', async (req, res) => {
                         attributes: ['id', 'name', 'unitPrice']
                     }]
                 }
-            ]
+            ],
+            order: [['createdAt', 'DESC']]
         });
         res.json(sales);
     } catch (error) {
@@ -119,14 +127,62 @@ router.get('/:id', async (req, res) => {
 
 // Create a new sale
 router.post('/', auditLogger('CREATE_SALE', 'Sale'), validate(saleSchemas.create), async (req, res) => {
+    const t = await sequelize.transaction();
     try {
-        const { userId, pumpId, fuelTypeId, quantity, unitPrice, openingMeterReading, closingMeterReading, shiftDate, shift, paymentMethod } = req.body;
+        const { userId, pumpId, fuelTypeId, quantity, unitPrice, openingMeterReading, closingMeterReading, shiftDate, shift, paymentMethod, customerId } = req.body;
         
-        // Calculate total amount
+        // 1. Calculate total amount
         const totalAmount = parseFloat(quantity) * parseFloat(unitPrice);
         
+        // 2. Find pump and tank
+        const pump = await Pump.findByPk(pumpId, {
+            include: [{ model: Tank, as: 'tank' }]
+        });
+        
+        if (!pump) {
+            await t.rollback();
+            return res.status(404).json({ message: 'Pump not found' });
+        }
+        
+        if (!pump.tank) {
+            await t.rollback();
+            return res.status(400).json({ message: 'Pump is not associated with any fuel tank' });
+        }
+        
+        // 3. Check tank levels
+        if (parseFloat(pump.tank.currentLevel) < parseFloat(quantity)) {
+            await t.rollback();
+            return res.status(400).json({ message: 'Insufficient fuel in tank' });
+        }
+        
+        // 4. Update tank level
+        await pump.tank.decrement('currentLevel', { by: quantity, transaction: t });
+        
+        // 5. If credit sale, update customer balance
+        if (paymentMethod.toLowerCase() === 'credit') {
+            if (!customerId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Customer is required for credit sales' });
+            }
+            const customer = await Customer.findByPk(customerId);
+            if (!customer) {
+                await t.rollback();
+                return res.status(404).json({ message: 'Customer not found' });
+            }
+            
+            // Check credit limit
+            if (parseFloat(customer.balance) + totalAmount > parseFloat(customer.creditLimit)) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Credit limit exceeded for this customer' });
+            }
+            
+            await customer.increment('balance', { by: totalAmount, transaction: t });
+        }
+        
+        // 6. Create the sale record
         const sale = await Sale.create({
             userId,
+            customerId,
             pumpId,
             fuelTypeId,
             quantity,
@@ -135,16 +191,44 @@ router.post('/', auditLogger('CREATE_SALE', 'Sale'), validate(saleSchemas.create
             openingMeterReading,
             closingMeterReading,
             shiftDate,
-            shift,
-            paymentMethod
+            shift: shift.toLowerCase(),
+            paymentMethod: paymentMethod.toLowerCase()
+        }, { transaction: t });
+        
+        // 7. Update pump meter reading
+        await pump.update({ currentMeterReading: closingMeterReading }, { transaction: t });
+        
+        // 8. Commit transaction
+        await t.commit();
+
+        // 9. Check for low fuel alert after sale
+        const updatedTank = await Tank.findByPk(pump.tankId, {
+            include: [{ model: FuelType, as: 'fuelType', attributes: ['name'] }]
         });
         
-        // Update pump meter reading
-        const pump = await Pump.findByPk(pumpId);
-        await pump.update({ currentMeterReading: closingMeterReading });
+        if (updatedTank && parseFloat(updatedTank.currentLevel) <= parseFloat(updatedTank.minLevel)) {
+            const wss = req.app.get('wss');
+            if (wss) {
+                wss.clients.forEach((client) => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'LOW_FUEL_ALERT',
+                            data: {
+                                tankId: updatedTank.id,
+                                tankNumber: updatedTank.tankNumber,
+                                fuelType: updatedTank.fuelType.name,
+                                currentLevel: updatedTank.currentLevel,
+                                minLevel: updatedTank.minLevel
+                            }
+                        }));
+                    }
+                });
+            }
+        }
         
         res.status(201).json(sale);
     } catch (error) {
+        if (t) await t.rollback();
         res.status(500).json({ message: error.message });
     }
 });

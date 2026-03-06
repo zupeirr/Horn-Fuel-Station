@@ -1,5 +1,5 @@
 const sequelize = require('../config/db');
-const { User, FuelType, Pump, Sale, Inventory, Supplier, Delivery } = require('../models');
+const { User, FuelType, Pump, Sale, Inventory, Supplier, Delivery, Tank, Customer, Expense, Shift } = require('../models');
 const { insertSampleData } = require('./sampleData');
 
 /**
@@ -7,9 +7,9 @@ const { insertSampleData } = require('./sampleData');
  */
 async function initializeDatabase() {
     try {
-        // Sync all models
-        await sequelize.sync({ force: false }); // Use force: true to drop and recreate tables
-        console.log('Database synced successfully!');
+        // Sync all models - set to true to handle schema changes for new business modules
+        await sequelize.sync({ force: true }); 
+        console.log('Database synced with full business schema!');
         
         // Create default fuel types if they don't exist
         const defaultFuelTypes = [
@@ -65,6 +65,31 @@ async function initializeDatabase() {
                 role: 'admin'
             });
             console.log('Created admin user: admin / password');
+        }
+
+        // Create default tanks for each fuel type if they don't exist
+        for (const fuelType of fuelTypes) {
+            const [tank, created] = await Tank.findOrCreate({
+                where: { tankNumber: `TANK-${fuelType.name.toUpperCase()}` },
+                defaults: {
+                    tankNumber: `TANK-${fuelType.name.toUpperCase()}`,
+                    fuelTypeId: fuelType.id,
+                    capacity: 10000.00,
+                    currentLevel: 8000.00,
+                    minLevel: 1000.00,
+                    status: 'active'
+                }
+            });
+            
+            if (created) {
+                console.log(`Created tank for ${fuelType.name}: ${tank.tankNumber}`);
+            }
+
+            // Link existing pumps of this fuel type to this tank if not already linked
+            await Pump.update(
+                { tankId: tank.id },
+                { where: { fuelTypeId: fuelType.id } }
+            );
         }
         
         // Initialize inventory for each fuel type
