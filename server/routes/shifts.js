@@ -3,6 +3,19 @@ const router = express.Router();
 const { Shift, User } = require('../models');
 const auditLogger = require('../middleware/auditLogger');
 
+// Get all shifts (alias for /history)
+router.get('/', async (req, res) => {
+    try {
+        const history = await Shift.findAll({
+            include: [{ model: User, as: 'user', attributes: ['username', 'role'] }],
+            order: [['createdAt', 'DESC']]
+        });
+        res.json(history);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // Start a shift
 router.post('/start', auditLogger('START_SHIFT', 'Shift'), async (req, res) => {
     try {
