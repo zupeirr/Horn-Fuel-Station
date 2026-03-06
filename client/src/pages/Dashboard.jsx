@@ -40,6 +40,17 @@ const Dashboard = () => {
       console.error('Failed to fetch dashboard data', error);
     } finally {
       setLoading(false);
+      // Fallback to empty data to prevent infinite loading screen
+      if (!data) {
+        setData({
+          today: { revenue: 0, transactions: 0, liters: 0 },
+          activePumps: 0,
+          lowFuelAlerts: 0,
+          tankLevels: [],
+          salesTrend: [],
+          fuelDistribution: []
+        });
+      }
     }
   };
 
