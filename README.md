@@ -1,109 +1,39 @@
-# Horn Fuel Station Management System
+# Horn Fuel Station
 
-A comprehensive fuel station management system built with Node.js, Express, and MySQL.
+A comprehensive fuel station management system supporting sales transactions, inventory alerts, receipt generation, and daily reporting.
 
-## Features
+## Overview
 
-- **Fuel Type Management**: Manage different fuel types (Petrol, Diesel, Kerosene) with pricing
-- **Pump Management**: Track pump meters, status, and operations
-- **Sales Management**: Record and track fuel sales with shift-based reporting
-- **Inventory Tracking**: Monitor fuel tank levels and receive low-stock alerts
-- **Reporting**: Generate daily, monthly, and analytical reports
-- **User Authentication**: Role-based access control (Admin, Manager, Cashier)
+This application serves to track gas pump fuel levels, log transactions done by cashiers, manage fuel types, and generate receipts and reports.
 
-## Technology Stack
+### Tech Stack
+- **Backend:** Node.js, Express, Sequelize (SQLite/MySQL)
+- **Frontend:** React, Vite (Coming in Phase 3)
 
-- **Backend**: Node.js with Express
-- **Database**: MySQL with Sequelize ORM
-- **Frontend**: EJS templating engine with Bootstrap
-- **Authentication**: JWT-based authentication
-- **Styling**: Custom CSS with Bootstrap 5
+## Quick Start
 
-## Installation
+### 1. Installation
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Set up environment variables in `.env` file
-4. Create the database and run migrations
-5. Start the server:
-   ```bash
-   npm run dev
-   ```
-
-## Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
-
-```
-DB_HOST=localhost
-DB_NAME=horn_fuel_station
-DB_USER=root
-DB_PASSWORD=
-DB_PORT=3306
-JWT_SECRET=your_super_secret_jwt_key_here_change_this_in_production
-PORT=3000
-NODE_ENV=development
+```bash
+npm install
 ```
 
-## API Endpoints
+### 2. Environment Variables
 
-### Authentication
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/me` - Get current user
+Copy the `.env.example` file and configure it:
 
-### Fuel Types
-- `GET /api/fuel-types` - Get all fuel types
-- `POST /api/fuel-types` - Create a new fuel type
-- `PUT /api/fuel-types/:id` - Update a fuel type
-- `DELETE /api/fuel-types/:id` - Deactivate a fuel type
+```bash
+cp .env.example .env
+```
 
-### Pumps
-- `GET /api/pumps` - Get all pumps
-- `POST /api/pumps` - Create a new pump
-- `PUT /api/pumps/:id` - Update a pump
-- `PATCH /api/pumps/:id/meter` - Update pump meter reading
-- `PATCH /api/pumps/:id/toggle` - Toggle pump status
+### 3. Run Development Server
 
-### Sales
-- `GET /api/sales` - Get all sales
-- `POST /api/sales` - Create a new sale
-- `GET /api/sales/summary/:date/:shift` - Get sales summary for a date/shift
-
-### Inventory
-- `GET /api/inventory` - Get all inventory items
-- `GET /api/inventory/summary` - Get inventory summary
-- `PATCH /api/inventory/update-level` - Update inventory level
-- `GET /api/inventory/alerts/low-stock` - Get low stock alerts
-
-### Reports
-- `GET /api/reports/daily-sales/:date` - Get daily sales report
-- `GET /api/reports/monthly-sales/:year/:month` - Get monthly sales report
-- `GET /api/reports/revenue-analytics` - Get revenue analytics
-
-## Database Schema
-
-The system uses the following main tables:
-
-- `users` - Store user information with roles
-- `fuel_types` - Define different fuel types and prices
-- `pumps` - Track fuel pumps and their status
-- `sales` - Record fuel sales transactions
-- `inventory` - Track fuel inventory levels
-- `suppliers` - Manage fuel suppliers
-- `deliveries` - Track fuel deliveries
+```bash
+npm run dev
+```
 
 ## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## License
-
-This project is licensed under the MIT License.
+[MIT](LICENSE)
