@@ -7,8 +7,8 @@ const { insertSampleData } = require('./sampleData');
  */
 async function initializeDatabase() {
     try {
-        // Sync all models - set to true to handle schema changes for new business modules
-        await sequelize.sync({ force: true }); 
+        // Sync all models - set to false to prevent data loss on restarts
+        await sequelize.sync({ force: false }); 
         console.log('Database synced with full business schema!');
         
         // Create default fuel types if they don't exist
