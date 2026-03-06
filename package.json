@@ -2,10 +2,13 @@
   "name": "horn-fuel-station",
   "version": "1.0.0",
   "description": "A comprehensive fuel station management system",
-  "main": "src/server.js",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint .",
+    "build": "echo \"Error: no build specified\" && exit 1"
   },
   "keywords": [
     "fuel",
@@ -21,14 +24,26 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "ejs": "^3.1.10",
+    "exceljs": "^4.4.0",
     "express": "^4.22.1",
+    "express-rate-limit": "^8.3.0",
+    "helmet": "^8.1.0",
+    "html-pdf-node": "^1.0.8",
+    "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.18.2",
     "sequelize": "^6.37.7",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "eslint": "^10.0.2",
+    "eslint-config-prettier": "^10.1.8",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.8.1"
   },
   "repository": {
     "type": "git",
