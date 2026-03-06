@@ -1,0 +1,79 @@
+openapi: 3.0.0
+info:
+  title: Horn Fuel Station API
+  description: Management API for fuel station point-of-sale, inventory, and reporting.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api
+    description: Development Server
+paths:
+  /auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /pumps:
+    get:
+      summary: Get all pumps
+      responses:
+        '200':
+          description: List of pumps
+    post:
+      summary: Create a new pump
+      responses:
+        '201':
+          description: Pump created
+
+  /tanks:
+    get:
+      summary: Get all tanks with current fuel level
+      responses:
+        '200':
+          description: List of tanks
+
+  /transactions:
+    post:
+      summary: Record a new fuel sale transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pump_id:
+                  type: integer
+                liters:
+                  type: number
+      responses:
+        '201':
+          description: Transaction created successfully
+
+  /reports/daily:
+    get:
+      summary: Get daily consolidated sales report
+      responses:
+        '200':
+          description: Daily report
